@@ -1,0 +1,77 @@
+@startuml
+!include <awslib/AWSCommon>
+!include <awslib/general/all.puml>
+!include <awslib/GroupIcons/all.puml>
+!include <awslib/Storage/all.puml>
+!include <awslib/Database/all.puml>
+!include <awslib/Compute/all.puml>
+' !include <tupadr3/common.puml>
+!include <material/common>
+!include <material/file_document>
+!include <material/alert>
+
+left to right direction
+skinparam linetype polyline
+title **High Level View of MDM Data Feed and Remaining Stories**
+
+
+'MA_FILE_DOCUMENT(Blue,1,ais528,rectangle,"AIS 528")
+
+together {
+  rectangle "<color:darkslategrey><$ma_file_document></color>\nAIS 528\nFile Spec" as ais528 #white
+  note top #lightyellow
+    [[https://pol-jira.atlassian.net/browse/INT-575 INT-575]]
+  end note
+  General(MDMExtracts, "MDM File Extracts", " ")
+  Lambda(fileIngestion, "MDM File Ingestion", " ")
+  note top #lightyellow
+    [[https://pol-jira.atlassian.net/browse/INT-513 INT-513]]
+  end note
+  SimpleStorageServiceS3(fileDump, "File Extract Dump", " ")
+}
+together {
+  Lambda(fileValidation,"Validate Files", " ")
+  note top #lightyellow
+    [[https://pol-jira.atlassian.net/browse/INT-568 INT-568]]
+  end note
+  SimpleStorageServiceS3(fileErrors, "Error Log Files", " ")
+  rectangle "<color:darkslategrey><$ma_alert></color>" as noFileAlert #white
+  note right #lightyellow
+    [[https://pol-jira.atlassian.net/browse/INT-509 INT-509]]
+  end note
+}
+Lambda(extractCFS,"CFS Extract", " ")
+note right #lightyellow
+  needed? or same as
+  Transaction Extract?
+end note
+Lambda(extractItem,"Item Extract", " ")
+note left #lightyellow
+  [[https://pol-jira.atlassian.net/browse/INT-525 INT-525]]
+end note
+Lambda(extractTrans,"Transaction Extract", " ")
+note left #lightyellow
+  no issue ??
+end note
+rectangle "<color:darkslategrey><$ma_file_document></color>\nMDM Transaction\nAttributes Specs" as MDMTransAttrSpecs #white
+note left #lightyellow
+  [[https://pol-jira.atlassian.net/browse/INT-576 INT-576]]
+end note
+rectangle "<color:darkslategrey><$ma_file_document></color>\nMDM Item\nEvent Specs" as MDMItemSpecs #white
+note right #lightyellow
+  [[https://pol-jira.atlassian.net/browse/INT-579 INT-579]]
+end note
+
+ais528 -- MDMExtracts
+MDMExtracts --> fileIngestion
+fileIngestion --> fileDump
+fileDump <--> fileValidation
+fileValidation --> fileErrors
+extractCFS -> fileDump
+extractItem --> fileDump
+extractItem -- MDMItemSpecs
+extractTrans --> fileDump
+extractTrans -- MDMTransAttrSpecs
+fileValidation -> noFileAlert
+
+@enduml
