@@ -5,38 +5,49 @@
 !include <awslib/Storage/all.puml>
 !include <awslib/Database/all.puml>
 !include <awslib/Compute/all.puml>
+!include <awslib/Mobile/all.puml>
+!include <awslib/Analytics/all.puml>
 !include <tupadr3/common.puml>
 !include <tupadr3/font-awesome-5/mobile_alt.puml>
 !include <material/common>
 !include <material/file_document>
 !include <material/alert>
 
-left to right direction
+/' left to right direction '/
 skinparam linetype polyline
 title **High Level View of Overall Architecture for SPM**
 
 
 'MA_FILE_DOCUMENT(Blue,1,ais528,rectangle,"AIS 528")
-FA5_MOBILE_ALT(mobDevice, "PJE Device") #white
-database "MDM\nReference Data" as mdmdb #white
-General(MDMExtracts, "MDM Extracts", " ")
-General(PZExtracts, "PayZone", " ")
+FA5_MOBILE_ALT(mobDevice, "PJE Device",node) #white {
+  General(pJE, "PJE", "sends transactions")
+}
+together {
+  database "MDM\nData" as mdmdb #white
+  General(MDMExtracts, "MDM Extracts", " ")
+}
+/' General(PZExtracts, "PayZone", " ") '/
+rectangle "SPM / AWS" as sPM #white {
+  APIGateway(transactionsApi, "Transactions API", " ")
+
 package "SPM Integration Services" as MDMTransAttrSpecs #white {
 together {
   /' rectangle "<color:darkslategrey><$ma_file_document></color>\nAIS 528\nFile Spec" as ais528 #white '/
   /' note top #lightyellow '/
   /'   [[https://pol-jira.atlassian.net/browse/INT-575 INT-575]] '/
   /' end note '/
-package "File Ingestion" as fileIngestion #white {
+package "File Ingestion" as fileIngestionPkg #white {
   Lambda(mDMFileIngestion, "MDM", "Lambda")
-  Lambda(pZFileIngestion, "PayZone", "Lambda")
+  /' Lambda(pZFileIngestion, "PayZone", "Lambda") '/
 }
   /' note top #lightyellow '/
   /'   [[https://pol-jira.atlassian.net/browse/INT-513 INT-513]] '/
   /' end note '/
-  SimpleStorageServiceS3(fileDump, "File Dump", "S3")
 }
+package "Reference Data" as refDataPkg #white {
+
 together {
+  SimpleStorageServiceS3(fileDump, "File Dump", "S3")
   Lambda(fileValidation,"Validate Files", " ")
   /' note top #lightyellow '/
   /'   [[https://pol-jira.atlassian.net/browse/INT-568 INT-568]] '/
@@ -47,6 +58,7 @@ together {
   /'   [[https://pol-jira.atlassian.net/browse/INT-509 INT-509]] '/
   /' end note '/
 }
+
 Lambda(extractCFS,"CFS Extract", " ")
 /' note right #lightyellow '/
 /'   needed? or same as '/
@@ -71,9 +83,20 @@ Lambda(extractCFS,"CFS Extract", " ")
 Lambda(queryItem, "Get Items/Products", " ")
 Lambda(queryLocation, "Get Locations", " ")
 }
+package "Transactions Data" #white {
+  DynamoDB(transactionsDb,"Transactions DB", " ")
+  Lambda(transactionsStream, "Get Transactions", " ")
+  KinesisDataFirehose(transactionsFirehose, "ETL Transactions", " ")
+  SimpleStorageServiceS3(dailyTransactionsDump, "Daily Transactions", " ")
+  Glue(glueTransactions, "Transform for Athena", " ")
+  GlueDataCatalog(glueTransactionsCatalog, "Transactions\nTransformation Catalog", " ")
+  Athena(queryTransactions, "Transactions Query Database", " ")
+}
+}
+}
 /' ais528 -- MDMExtracts '/
-mdmdb -- MDMExtracts
-PZExtracts --> pZFileIngestion :Reconciliation
+mdmdb - MDMExtracts
+/' PZExtracts --> pZFileIngestion :Reconciliation '/
 MDMExtracts --> mDMFileIngestion
 mDMFileIngestion --> fileDump
 fileDump <--> fileValidation
@@ -81,6 +104,14 @@ fileValidation --> fileErrors
 extractCFS -> fileDump
 queryItem-> fileDump
 queryLocation -> fileDump
+pJE <-down-> transactionsApi
+transactionsApi <-> transactionsDb
+transactionsDb -> transactionsStream :DynamoDB Streams
+transactionsStream -> transactionsFirehose
+transactionsFirehose -> dailyTransactionsDump
+dailyTransactionsDump -> glueTransactions
+glueTransactions -> queryTransactions
+glueTransactions <- glueTransactionsCatalog
 /' extractItem --> fileDump '/
 /' extractItem -- MDMItemSpecs '/
 /' extractTrans --> fileDump '/
