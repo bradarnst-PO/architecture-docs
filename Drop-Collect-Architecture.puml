@@ -12,18 +12,21 @@
 !include <material/common>
 !include <material/file_document>
 !include <material/alert>
+!include <material/application>
 
 /' left to right direction '/
 skinparam linetype polyline
 title **High Level View of Overall Architecture for SPM**
 
 
-'MA_FILE_DOCUMENT(Blue,1,ais528,rectangle,"AIS 528")
-FA5_MOBILE_ALT(mobDevice, "PJE Device",node) #white {
-  General(pJE, "PJE", "sends transactions")
+/' FA5_MOBILE_ALT(mobDevice, "PJE Device",node) #white { '/
+MobileClient(mobDevice, "PJE Device","") {
+  'General(pJE, "PJE", "sends transactions")
+  MA_APPLICATION(darkslategrey,1,pJE,rectangle,"PJE App") #white
 }
 together {
-  database "MDM\nData" as mdmdb #white
+  'database "MDM\nData" as mdmdb #white
+  GenericDatabase(mdmdb, "MDM\nData", " ")
   General(MDMExtracts, "MDM Extracts", " ")
 }
 /' General(PZExtracts, "PayZone", " ") '/
@@ -32,54 +35,23 @@ rectangle "SPM / AWS" as sPM #white {
 
 package "SPM Integration Services" as MDMTransAttrSpecs #white {
 together {
-  /' rectangle "<color:darkslategrey><$ma_file_document></color>\nAIS 528\nFile Spec" as ais528 #white '/
-  /' note top #lightyellow '/
-  /'   [[https://pol-jira.atlassian.net/browse/INT-575 INT-575]] '/
-  /' end note '/
 package "File Ingestion" as fileIngestionPkg #white {
   Lambda(mDMFileIngestion, "MDM", "Lambda")
   /' Lambda(pZFileIngestion, "PayZone", "Lambda") '/
 }
-  /' note top #lightyellow '/
-  /'   [[https://pol-jira.atlassian.net/browse/INT-513 INT-513]] '/
-  /' end note '/
 }
 package "Reference Data" as refDataPkg #white {
 
 together {
   SimpleStorageServiceS3(fileDump, "File Dump", "S3")
   Lambda(fileValidation,"Validate Files", " ")
-  /' note top #lightyellow '/
-  /'   [[https://pol-jira.atlassian.net/browse/INT-568 INT-568]] '/
-  /' end note '/
   SimpleStorageServiceS3(fileErrors, "Error Log Files", " ")
   rectangle "<color:darkslategrey><$ma_alert></color>\nAlerts" as noFileAlert #white
-  /' note right #lightyellow '/
-  /'   [[https://pol-jira.atlassian.net/browse/INT-509 INT-509]] '/
-  /' end note '/
 }
 
 Lambda(extractCFS,"CFS Extract", " ")
-/' note right #lightyellow '/
-/'   needed? or same as '/
-/'   Transaction Extract? '/
-/' end note '/
 /' Lambda(extractItem,"Item Extract", " ") '/
-/' note left #lightyellow '/
-/'   [[https://pol-jira.atlassian.net/browse/INT-525 INT-525]] '/
-/' end note '/
-/' Lambda(extractTrans,"Transaction Extract", " ") '/
-/' note left #lightyellow '/
-/'   no issue ?? '/
-/' end note '/
-/' rectangle "<color:darkslategrey><$ma_file_document></color>\nMDM Transaction\nAttributes Specs" as MDMTransAttrSpecs #white '/
-/' note left #lightyellow '/
-/'   [[https://pol-jira.atlassian.net/browse/INT-576 INT-576]] '/
-/' end note '/
 /' rectangle "<color:darkslategrey><$ma_file_document></color>\nMDM Item\nEvent Specs" as MDMItemSpecs #white '/
-/' note right #lightyellow '/
-/'   [[https://pol-jira.atlassian.net/browse/INT-579 INT-579]] '/
-/' end note '/
 Lambda(queryItem, "Get Items/Products", " ")
 Lambda(queryLocation, "Get Locations", " ")
 }
@@ -94,7 +66,6 @@ package "Transactions Data" #white {
 }
 }
 }
-/' ais528 -- MDMExtracts '/
 mdmdb - MDMExtracts
 /' PZExtracts --> pZFileIngestion :Reconciliation '/
 MDMExtracts --> mDMFileIngestion
