@@ -22,17 +22,24 @@ title **High Level View of Overall Architecture for SPM**
 /' FA5_MOBILE_ALT(mobDevice, "PJE Device",node) #white { '/
 MobileClient(mobDevice, "PJE Device","") {
   'General(pJE, "PJE", "sends transactions")
-  MA_APPLICATION(darkslategrey,1,pJE,rectangle,"PJE App") #white
+  /' MA_APPLICATION(darkslategrey,1,pJE,rectangle,"PJE App") #white { '/
+  package "PJE" as pJE #white {
+  MA_APPLICATION(darkslategrey,1,pJETransactions, rectangle, "Transactions") #white
+  MA_APPLICATION(darkslategrey,1,pJEDispatch, rectangle, "Dispatch App") #white
+}
 }
 together {
   'database "MDM\nData" as mdmdb #white
   GenericDatabase(mdmdb, "MDM\nData", " ")
   General(MDMExtracts, "MDM Extracts", " ")
+  General(cFSFileDump,"CFS File Dump", " ")
 }
 /' General(PZExtracts, "PayZone", " ") '/
 rectangle "SPM / AWS" as sPM #white {
+together {
   APIGateway(transactionsApi, "Transactions API", " ")
-
+  APIGateway(dispatchApi, "Dispatch API", " ")
+}
 package "SPM Integration Services" as MDMTransAttrSpecs #white {
 together {
 package "File Ingestion" as fileIngestionPkg #white {
@@ -64,8 +71,17 @@ package "Transactions Data" #white {
   GlueDataCatalog(glueTransactionsCatalog, "Transactions\nTransformation Catalog", " ")
   Athena(queryTransactions, "Transactions Query Database", " ")
 }
+Lambda(cFSDailyFeed, "Create CFS Daily Files", " ")
+package "Dispatch" #white {
+  DynamoDB(dispatchDb, "Dispatch DB", " ")
+  Lambda(dispatchStream, "Get Parcels for Dispatch", " ")
+  Lambda(trackingSteam, "RM Parcels to Track", " ")
 }
 }
+}
+APIGateway(rMTTApi,"Royal Mail\nTrack & Trace API", " ")
+' ***********
+' Flows
 mdmdb - MDMExtracts
 /' PZExtracts --> pZFileIngestion :Reconciliation '/
 MDMExtracts --> mDMFileIngestion
@@ -75,14 +91,22 @@ fileValidation --> fileErrors
 extractCFS -> fileDump
 queryItem-> fileDump
 queryLocation -> fileDump
-pJE <-down-> transactionsApi
-transactionsApi <-> transactionsDb
-transactionsDb -> transactionsStream :DynamoDB Streams
-transactionsStream -> transactionsFirehose
+pJETransactions <--> transactionsApi
+transactionsApi <-> transactionsDb 
+transactionsDb -> transactionsStream :Stream
+transactionsStream -up-> transactionsFirehose
 transactionsFirehose -> dailyTransactionsDump
 dailyTransactionsDump -> glueTransactions
 glueTransactions -> queryTransactions
-glueTransactions <- glueTransactionsCatalog
+glueTransactionsCatalog -> glueTransactions
+pJEDispatch<--> dispatchApi
+dispatchApi <--> dispatchDb
+transactionsDb -down-> dispatchStream :Stream
+dispatchStream -> dispatchDb
+dispatchDb -> trackingSteam
+trackingSteam -> rMTTApi
+cFSDailyFeed <-> queryTransactions
+cFSDailyFeed -> cFSFileDump
 /' extractItem --> fileDump '/
 /' extractItem -- MDMItemSpecs '/
 /' extractTrans --> fileDump '/
