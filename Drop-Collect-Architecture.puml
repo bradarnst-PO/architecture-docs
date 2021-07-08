@@ -1,68 +1,98 @@
 @startuml
-!include <awslib/AWSCommon>
+!include <awslib/AWSCommon.puml>
+!include <awslib/Analytics/all.puml>
+!include <awslib/ApplicationIntegration/all.puml>
+!include <awslib/Compute/all.puml>
+!include <awslib/Database/all.puml>
+!include <awslib/EndUserComputing/all.puml>
 !include <awslib/general/all.puml>
 !include <awslib/GroupIcons/all.puml>
 !include <awslib/Storage/all.puml>
-!include <awslib/Database/all.puml>
-!include <awslib/Compute/all.puml>
 !include <awslib/Mobile/all.puml>
-!include <awslib/Analytics/all.puml>
-!include <tupadr3/common.puml>
-!include <tupadr3/font-awesome-5/mobile_alt.puml>
 !include <material/common>
 !include <material/file_document>
 !include <material/alert>
 !include <material/application>
+!include <tupadr3/common.puml>
+!include <tupadr3/font-awesome-5/mobile_alt.puml>
 
+!theme aws-orange
+skinparam backgroundColor white
+/' top to bottom direction '/
 /' left to right direction '/
-skinparam linetype polyline
-title **High Level View of Overall Architecture for SPM**
+/' skinparam linetype polyline '/
+skinparam ArrowThickness 2
+title High Level View of Overall Architecture for SPM\nDrop and Collect Release (Sept 2021)
 
 
-/' FA5_MOBILE_ALT(mobDevice, "PJE Device",node) #white { '/
+/' FA5_MOBILE_ALT(mobDevice, "PJE Device",node)  { '/
 MobileClient(mobDevice, "PJE Device","") {
   'General(pJE, "PJE", "sends transactions")
-  /' MA_APPLICATION(darkslategrey,1,pJE,rectangle,"PJE App") #white { '/
-  package "PJE" as pJE #white {
-  MA_APPLICATION(darkslategrey,1,pJETransactions, rectangle, "Transactions") #white
-  MA_APPLICATION(darkslategrey,1,pJEDispatch, rectangle, "Dispatch App") #white
+  /' MA_APPLICATION(darkslategrey,1,pJE,rectangle,"PJE App")  { '/
+  package "PJE" as pJE  {
+    MA_APPLICATION(darkslategrey,1,pJETransactions, rectangle, "Transactions") 
+    MA_APPLICATION(darkslategrey,1,pJEDispatch, rectangle, "Dispatch App") 
+  }
 }
+WorkDocs(amazonPUDOWorkDocs, "Amazon PUDO WorkDocs", " ")
+rectangle "Accenture Azure Tennant" {
+  MA_APPLICATION(darkslategrey,1,aFTG, rectangle, "SAP Data Gateway\n(AFTG)") 
 }
 together {
-  'database "MDM\nData" as mdmdb #white
   GenericDatabase(mdmdb, "MDM\nData", " ")
-  General(MDMExtracts, "MDM Extracts", " ")
-  General(cFSFileDump,"CFS File Dump", " ")
+  General(mDMETL, "MDM ETL", " ")
 }
+General(cFSFileDump,"CFS File Dump", " ")
 /' General(PZExtracts, "PayZone", " ") '/
-rectangle "SPM / AWS" as sPM #white {
+rectangle "SPM / AWS" as sPM  {
 together {
   APIGateway(transactionsApi, "Transactions API", " ")
   APIGateway(dispatchApi, "Dispatch API", " ")
 }
-package "SPM Integration Services" as MDMTransAttrSpecs #white {
-together {
-package "File Ingestion" as fileIngestionPkg #white {
+package "SPM Integration Services" as MDMTransAttrSpecs  {
+package "File Ingestion" as fileIngestionPkg  {
   Lambda(mDMFileIngestion, "MDM", "Lambda")
   /' Lambda(pZFileIngestion, "PayZone", "Lambda") '/
 }
-}
-package "Reference Data" as refDataPkg #white {
-
-together {
-  SimpleStorageServiceS3(fileDump, "File Dump", "S3")
-  Lambda(fileValidation,"Validate Files", " ")
-  SimpleStorageServiceS3(fileErrors, "Error Log Files", " ")
-  rectangle "<color:darkslategrey><$ma_alert></color>\nAlerts" as noFileAlert #white
-}
-
+package "Reference Data" as refDataPkg  {
+  package "Dump MDM CSV Files" as mDMFileDump {
+    SimpleStorageServiceS3(mDMCSVBucket, "MDM CSV Files", "S3")
+    Lambda(validateMDMFiless,"Validate Files", " ")
+    SimpleStorageServiceS3(mDMFileErrors, "Error Log Files", " ")
+    rectangle "<color:darkslategrey><$ma_alert></color>\nAlerts" as noMDMFileAlert 
+  }
 Lambda(extractCFS,"CFS Extract", " ")
 /' Lambda(extractItem,"Item Extract", " ") '/
-/' rectangle "<color:darkslategrey><$ma_file_document></color>\nMDM Item\nEvent Specs" as MDMItemSpecs #white '/
-Lambda(queryItem, "Get Items/Products", " ")
-Lambda(queryLocation, "Get Locations", " ")
+/' rectangle "<color:darkslategrey><$ma_file_document></color>\nMDM Item\nEvent Specs" as MDMItemSpecs  '/
+together {
+  Lambda(queryItem, "Get Items", " ")
+  SQSQueue(itemEventQ,"Item Event", " ")
 }
-package "Transactions Data" #white {
+together {
+  Lambda(queryLocation, "Get Locations", " ")
+  SQSQueue(locationEventQ,"Location Event", " ")
+}
+}
+package "PUDO Integration" as pUDOIntegration {
+  SimpleStorageServiceS3(pUDOAmazonFiles, "PUDO\nTransaction Files", " ")
+  Lambda(pUDOLookup, "PUDO Lookup", " ")
+  together {
+    Lambda(pUDOFileValidation, "PUDO\nFile Validation", " ")
+    SimpleStorageServiceS3(pUDOFileErrors, "Error Log Files", " ")
+    rectangle "<color:darkslategrey><$ma_alert></color>\nAlerts" as noPUDOFileAlert 
+  }
+  SimpleStorageServiceS3(pUDOTransactionsBucket, "PUDO\nTransactions", " ")
+  Lambda(pUDOTransformation, "PUDO\nTransformation", " ")
+  together {
+    Glue(gluePUDO, "PUDO\nGlue Table", " ")
+    Athena(athenaPUDOQuery, "Athena\nPUDO Query", " ")
+  }
+  SimpleStorageServiceS3(pUDOCFSBucket, "CFS\nAggregation File", " ")
+  Lambda(cFSMonthlyPUDOFeed, "CFS Monthly\nPUDO Feed", " ")
+
+}
+
+package "Transactions Data" as transactionsData {
   DynamoDB(transactionsDb,"Transactions DB", " ")
   Lambda(transactionsStream, "Get Transactions", " ")
   KinesisDataFirehose(transactionsFirehose, "ETL Transactions", " ")
@@ -70,47 +100,66 @@ package "Transactions Data" #white {
   Glue(glueTransactions, "Transform for Athena", " ")
   GlueDataCatalog(glueTransactionsCatalog, "Transactions\nTransformation Catalog", " ")
   Athena(queryTransactions, "Transactions Query Database", " ")
+  Lambda(cFSDailyFeed, "Create CFS Daily Files", " ")
 }
-Lambda(cFSDailyFeed, "Create CFS Daily Files", " ")
-package "Dispatch" #white {
+
+package "Dispatch"  {
   DynamoDB(dispatchDb, "Dispatch DB", " ")
   Lambda(dispatchStream, "Get Parcels for Dispatch", " ")
   Lambda(trackingSteam, "RM Parcels to Track", " ")
+  Lambda(updateStates,"Update Parcel\nStates & Counts", " ")
 }
 }
 }
 APIGateway(rMTTApi,"Royal Mail\nTrack & Trace API", " ")
 ' ***********
 ' Flows
-mdmdb - MDMExtracts
+mdmdb <- mDMETL
 /' PZExtracts --> pZFileIngestion :Reconciliation '/
-MDMExtracts --> mDMFileIngestion
-mDMFileIngestion --> fileDump
-fileDump <--> fileValidation
-fileValidation --> fileErrors
-extractCFS -> fileDump
-queryItem-> fileDump
-queryLocation -> fileDump
+mDMETL -> aFTG :push
+mDMFileIngestion -> aFTG :sftp pull
+mDMFileIngestion -> mDMCSVBucket
+mDMCSVBucket <--> validateMDMFiless
+validateMDMFiless --> mDMFileErrors
+extractCFS -> mDMCSVBucket
+queryItem -> mDMCSVBucket
+queryItem -d-> itemEventQ
+queryLocation -> mDMCSVBucket
+queryLocation -d-> locationEventQ
+pUDOIntegration -[hidden]down- transactionsData
 pJETransactions <--> transactionsApi
 transactionsApi <-> transactionsDb 
 transactionsDb -> transactionsStream :Stream
-transactionsStream -up-> transactionsFirehose
+transactionsStream -u-> transactionsFirehose
 transactionsFirehose -> dailyTransactionsDump
 dailyTransactionsDump -> glueTransactions
 glueTransactions -> queryTransactions
 glueTransactionsCatalog -> glueTransactions
+cFSDailyFeed -u-> queryTransactions
+cFSDailyFeed -> cFSFileDump
+validateMDMFiless -> noMDMFileAlert
+amazonPUDOWorkDocs -> pUDOAmazonFiles :copy
+amazonPUDOWorkDocs -[hidden]- pUDOIntegration
+pUDOAmazonFiles -d-> pUDOLookup :new file trigger
+pUDOLookup -> pUDOFileValidation :invokes
+pUDOFileValidation -> pUDOTransactionsBucket
+pUDOFileValidation -d-> pUDOFileErrors
+pUDOFileValidation -> noPUDOFileAlert
+pUDOTransactionsBucket -u-> pUDOTransformation :new file trigger
+pUDOTransformation -d-> athenaPUDOQuery
+athenaPUDOQuery -u-> pUDOCFSBucket
+gluePUDO <-left- athenaPUDOQuery
+cFSMonthlyPUDOFeed -> pUDOCFSBucket
+cFSMonthlyPUDOFeed -> cFSFileDump
+/' athenaPUDOQuery -[hidden]- gluePUDO '/
 pJEDispatch<--> dispatchApi
 dispatchApi <--> dispatchDb
-transactionsDb -down-> dispatchStream :Stream
+transactionsDb -d-> dispatchStream :Stream
 dispatchStream -> dispatchDb
-dispatchDb -> trackingSteam
+dispatchDb -> trackingSteam :Stream
+dispatchDb -d-> updateStates :Stream
+updateStates -> dispatchDb
 trackingSteam -> rMTTApi
-cFSDailyFeed <-> queryTransactions
-cFSDailyFeed -> cFSFileDump
-/' extractItem --> fileDump '/
-/' extractItem -- MDMItemSpecs '/
-/' extractTrans --> fileDump '/
-/' extractTrans -- MDMTransAttrSpecs '/
-fileValidation -> noFileAlert
+
 
 @enduml
