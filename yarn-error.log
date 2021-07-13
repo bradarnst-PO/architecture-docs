@@ -1,0 +1,31 @@
+Arguments: 
+  /usr/bin/node /home/brad/.npm/bin/yarn set version berrry
+
+PATH: 
+  /home/brad/.npm/bin:/usr/local/bin:/usr/local/sbin:/home/brad/perl5/bin:/home/brad/.npm/bin:/home/brad/.local/kitty.app/bin:/home/brad/.local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+
+Yarn version: 
+  1.22.10
+
+Node version: 
+  15.14.0
+
+Platform: 
+  linux x64
+
+Trace: 
+  Error: Release not found: berrry
+      at /home/brad/.npm/lib/node_modules/yarn/lib/cli.js:89857:17
+      at Generator.next (<anonymous>)
+      at step (/home/brad/.npm/lib/node_modules/yarn/lib/cli.js:310:30)
+      at /home/brad/.npm/lib/node_modules/yarn/lib/cli.js:321:13
+      at processTicksAndRejections (node:internal/process/task_queues:94:5)
+
+npm manifest: 
+  No manifest
+
+yarn manifest: 
+  No manifest
+
+Lockfile: 
+  No lockfile
