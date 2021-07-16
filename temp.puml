@@ -1,0 +1,97 @@
+@startuml
+!include <awslib/AWSCommon.puml>
+/' !include <awslib/AWSSimplified.puml> '/
+!include <awslib/Analytics/all.puml>
+!include <awslib/ApplicationIntegration/all.puml>
+!include <awslib/Compute/all.puml>
+!include <awslib/CustomerEngagement/all.puml>
+!include <awslib/Database/all.puml>
+!include <awslib/EndUserComputing/all.puml>
+!include <awslib/general/all.puml>
+!include <awslib/GroupIcons/all.puml>
+!include <awslib/NetworkingAndContentDelivery/all.puml>
+!include <awslib/Storage/all.puml>
+!include <awslib/Mobile/all.puml>
+!include <material/common>
+!include <material/table_edit>
+!include <material/file_document>
+!include <material/alert>
+!include <material/application>
+!include <material/transfer>
+!include <tupadr3/common.puml>
+
+!theme aws-orange
+skinparam backgroundColor white
+skinparam nodeFontColor darkslategrey
+/' top to bottom direction '/
+/' left to right direction '/
+/' skinparam linetype polyline '/
+skinparam ArrowThickness 2
+together {
+  rectangle "MDM" as mDM
+  note "initial full load of all data" as noteInitialLoad
+}
+VirtualPrivateCloudVPC(sPMAWS, "SPM / AWS", " ") {
+    package "File Ingestion" as fileIngestionPkg  {
+      Lambda(mDMFileIngestion, "Get Files", "retrieve MDM files")
+      SimpleStorageServiceS3(mDMCSVBucket, "MDM S3 Bucket", "MDM csv files")
+    }
+    package "Reference Data" as refDataPkg  {
+      DatabaseMigrationService(transformMDM, "AWS DMS", "map MDM fields to RDF or Gremlin")
+      Database(neptuneDb, "Complete Reference Data", "reference data with relationships")
+      package "LoDAS" as loDAS {
+        Lambda(queryItem, "Query Items", "ad-hoc & new items")
+        SQSQueue(itemEventQ,"Item Event", "on new item")
+      }
+      package "ProDAS" as proDAD {
+        Lambda(queryLocation, "Query Locations", "ad-hoc & new locations")
+        SQSQueue(locationEventQ,"Location Event", "on new location")
+      }
+    }
+    APIGateway2(internalAPIgw, "Internal API Gateway", "internal gateway") {
+      APIGatewayEndpoint2(productsApi, "ProDAS API", "GET only")
+      APIGatewayEndpoint2(locationsApi, "LoDAS API", "GET only")
+    }
+    APIGateway2(externalAPIgw, "External API Gateway", "external gateway") {
+      APIGatewayEndpoint2(extProductsApi, "ProDAS API", "GET only")
+      APIGatewayEndpoint2(extLocationsApi, "LoDAS API", "GET only")
+    }
+    package "Other Tech Services" as otherTechServices {
+      node "Any Internal Service" as anyInternalService
+      node "Any Internal App" as anyInternallApp
+    }
+    Lambda(filterExternalLocCalls, "Filter/Route External Location API Calls", "filter as/if required")
+    note "additional security from external partners as/if requred" as noteFiltering
+}
+node "Amazon" as amazon
+node "Local Collect" as localCollect
+
+' Flows ***************** Flows
+mDM ..> noteInitialLoad
+mDMFileIngestion -> mDM :daily delta\lcsv files
+mDMCSVBucket <- mDMFileIngestion
+neptuneDb <- transformMDM
+transformMDM -> mDMCSVBucket
+
+/' fileIngestionPkg -[hidden]- mDMFileDump '/
+/' mDMFileDump -[hidden]- reFDataOpsTeam '/
+/' internalAPIgw -[hidden]- refDataPkg '/
+/' internalAPIgw -[hidden]- mDMFileDump '/
+queryItem -> neptuneDb
+neptuneDb -d-> itemEventQ :stream
+queryLocation -> neptuneDb
+neptuneDb -d-> locationEventQ :stream
+locationsApi -u-> queryLocation
+productsApi -u-> queryItem
+internalAPIgw -[hidden]d- externalAPIgw
+externalAPIgw -[hidden]d- otherTechServices
+internalAPIgw -[hidden]d- filterExternalLocCalls
+anyInternallApp <-> locationsApi
+anyInternalService <-> productsApi
+locationsApi <-> filterExternalLocCalls
+filterExternalLocCalls <-> extLocationsApi
+extLocationsApi <-d-> amazon
+extLocationsApi <-d-> localCollect
+externalAPIgw <.. noteFiltering
+@enduml
+

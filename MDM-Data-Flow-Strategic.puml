@@ -1,0 +1,114 @@
+@startuml
+!include <awslib/AWSCommon.puml>
+/' !include <awslib/AWSSimplified.puml> '/
+!include <awslib/Analytics/all.puml>
+!include <awslib/ApplicationIntegration/all.puml>
+!include <awslib/Compute/all.puml>
+!include <awslib/CustomerEngagement/all.puml>
+!include <awslib/Database/all.puml>
+!include <awslib/EndUserComputing/all.puml>
+!include <awslib/general/all.puml>
+!include <awslib/GroupIcons/all.puml>
+!include <awslib/NetworkingAndContentDelivery/all.puml>
+!include <awslib/Storage/all.puml>
+!include <awslib/Mobile/all.puml>
+!include <material/common>
+!include <material/table_edit>
+!include <material/file_document>
+!include <material/alert>
+!include <material/application>
+!include <material/transfer>
+!include <tupadr3/common.puml>
+
+!theme aws-orange
+skinparam backgroundColor white
+/' top to bottom direction '/
+/' left to right direction '/
+/' skinparam linetype polyline '/
+skinparam ArrowThickness 2
+title MDM Update Data Flow - Business To SPM (Strategic)
+
+Users(businessDataChange, "Business", "MDM updates required")
+User(enterMDMData, "MDM User", "MDM updates from business")
+User(approveMDMData, "MDM Approver", "approve MDM data updates")
+together {
+  MA_TABLE_EDIT(lightslategrey,1,mDMUI, rectangle, "MDM Data Entry")
+  GenericDatabase(mDMdb, "MDM  ", "db tables")
+  MA_TRANSFER(lightslategrey,1,mDMETL, rectangle, "MDM ETL\nAll Current Tables")
+}
+rectangle "Accenture Azure Tennant" as azureTennant {
+  MA_APPLICATION(darkslategrey,1,aFTG, rectangle, "SAP Data Gateway") 
+}
+rectangle "SPM" as sPM {
+  Users(reFDataOpsTeam, "Ops Team", "respond to alerts")
+  VirtualPrivateCloudVPC(sPMAWS, "SPM / AWS", " ") {
+      package "File Ingestion" as fileIngestionPkg  {
+        Lambda(mDMFileIngestion, "Get Files", "retrieve MDM files")
+      }
+      package "Reference Data" as refDataPkg  {
+        DatabaseMigrationService(transformMDM, "AWS DMS", "map MDM fields to RDF or Gremlin")
+        Database(neptuneDb, "Complete Reference Data", "reference data with relationships")
+        Lambda(extractCFS,"CFS Extract", " ")
+        together {
+          Lambda(queryItem, "Query Items", "ad-hoc & new items")
+          SQSQueue(itemEventQ,"Item Event", "on new item")
+        }
+        together {
+          Lambda(queryLocation, "Query Locations", "ad-hoc & new locations")
+          SQSQueue(locationEventQ,"Location Event", "on new location")
+        }
+      }
+
+        package "Dump MDM CSV Files" as mDMFileDump {
+          SimpleStorageServiceS3(mDMCSVBucket, "MDM S3 Bucket", "MDM csv files")
+          Lambda(validateMDMFiless,"Validate Files", " ")
+          SimpleStorageServiceS3(mDMFileErrors, "Error Log Files", " ")
+          SESEmail(mDMFileAlert, "Alerts", " ")
+        }
+
+
+      APIGateway2(internalAPIgw, "Internal API Gateway", "internal gateway") {
+        APIGatewayEndpoint2(productsApi, "Products API", "GET only")
+        APIGatewayEndpoint2(locationsApi, "Locations API", "GET only")
+      }
+      
+      note "placeholder exact ETL not designed" as notePlaceholderDMS
+  }
+}
+
+' Flows ***************** Flows
+businessDataChange -d-> enterMDMData :notify
+enterMDMData -> mDMUI :enter data
+mDMUI -> mDMdb
+approveMDMData -d-> mDMUI :approve
+mDMdb <- mDMETL
+note top
+  initial, full load of
+  all (current) data
+end note
+mDMETL -> aFTG :daily delta\ncsv files
+
+azureTennant -[hidden]- fileIngestionPkg
+fileIngestionPkg -[hidden]- mDMFileDump
+mDMFileDump -[hidden]- reFDataOpsTeam
+internalAPIgw -[hidden]- refDataPkg
+/' internalAPIgw -[hidden]- mDMFileDump '/
+mDMFileIngestion -> aFTG :sftp pull
+mDMFileIngestion -> mDMCSVBucket
+mDMCSVBucket <--> validateMDMFiless
+validateMDMFiless --> mDMFileErrors
+mDMCSVBucket -> mDMFileAlert
+mDMFileAlert -> reFDataOpsTeam
+extractCFS -u-> neptuneDb
+transformMDM -> mDMCSVBucket
+notePlaceholderDMS ..> transformMDM
+transformMDM -> neptuneDb
+queryItem -> neptuneDb
+neptuneDb -d-> itemEventQ :stream
+queryLocation -> neptuneDb
+neptuneDb -d-> locationEventQ :stream
+locationsApi -d-> queryLocation
+productsApi -d-> queryItem
+
+@enduml
+

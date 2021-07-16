@@ -9,7 +9,7 @@
 !include <awslib/general/all.puml>
 !include <awslib/GroupIcons/all.puml>
 !include <awslib/Storage/all.puml>
-!include <awslib/Mobile/all.puml>
+!include <awslib/NetworkingAndContentDelivery/all.puml>
 !include <material/common>
 !include <material/file_document>
 !include <material/alert>
@@ -46,10 +46,10 @@ together {
 General(cFSFileDump,"CFS File Dump", " ")
 /' General(PZExtracts, "PayZone", " ") '/
 rectangle "SPM / AWS" as sPM  {
-together {
-  APIGateway(transactionsApi, "Transactions API", " ")
-  APIGateway(dispatchApi, "Dispatch API", " ")
-}
+  APIGateway2(externalAPIgw, "PO API Gateway", "external gateway") {
+    APIGatewayEndpoint2(transactionsApi, "Transactions API", " ")
+    APIGatewayEndpoint2(dispatchApi, "Dispatch API", " ")
+  }
 package "SPM Integration Services" as MDMTransAttrSpecs  {
 package "File Ingestion" as fileIngestionPkg  {
   Lambda(mDMFileIngestion, "MDM", "Lambda")
@@ -112,7 +112,7 @@ package "Dispatch"  {
 }
 }
 }
-APIGateway(rMTTApi,"Royal Mail\nTrack & Trace API", " ")
+APIGatewayEndpoint2(rMTTApi,"Royal Mail\nTrack & Trace API", "send parcels for T&T")
 ' ***********
 ' Flows
 mdmdb <- mDMETL
